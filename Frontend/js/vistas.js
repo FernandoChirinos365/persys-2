@@ -774,71 +774,197 @@ const Vistas = {
         }
     },
 
-    renderUsuarios: (container) => {
-        container.innerHTML = `
-            <div class="flex justify-between items-center mb-4"><h2>Usuarios</h2><button class="btn btn-primary" onclick="Vistas.modalCrearUsuario()">+ Usuario</button></div>
-            <div class="table-container"><table><thead><tr><th>User</th><th>Nombre</th><th>Rol</th><th>Accion</th></tr></thead><tbody id="tb-user"></tbody></table></div>`;
-        const tbody = document.getElementById('tb-user');
-        db.getTabla('usuarios').forEach(u => {
-            tbody.innerHTML += `<tr>
-                <td>${u.username}</td>
-                <td>${u.nombre}</td>
-                <td>${u.rol}</td>
-                <td>
-                    <button class="btn btn-sm btn-secondary" onclick="Vistas.modalEditarUsuario(${u.id})">Editar</button>
-                    ${u.id !== 1 ? `<button class="btn btn-sm btn-danger" onclick="Vistas.eliminarUsuario(${u.id})">X</button>` : ''}
-                </td>
-            </tr>`;
-        });
-    },
+ renderUsuarios: async (container) => {
+    container.innerHTML = `
+        <div class="flex justify-between items-center mb-4">
+            <h2>Usuarios</h2>
+            <button class="btn btn-primary" onclick="Vistas.modalCrearUsuario()">+ Usuario</button>
+        </div>
+        <div class="table-container">
+            <table>
+                <thead><tr><th>Email</th><th>Nombre</th><th>Rol</th><th>Acción</th></tr></thead>
+                <tbody id="tb-user"><tr><td colspan="4" style="text-align:center">Cargando...</td></tr></tbody>
+            </table>
+        </div>`;
 
-    modalCrearUsuario: () => {
-        Vistas.abrirModal(`<h3>Nuevo Usuario</h3><input id="u-user" placeholder="User"><input id="u-pass" placeholder="Pass"><input id="u-name" placeholder="Nombre">
-        <select id="u-rol"><option value="vendedora">Vendedora</option><option value="almacen">Almacen</option><option value="controller">Controller</option></select>
-        <button class="btn btn-success w-full" onclick="Vistas.guardarUsuario()">Crear</button>`);
-    },
+    const { data, error } = await supabaseClient
+        .from('perfiles')
+        .select('*');
 
-    guardarUsuario: () => {
-        db.insertar('usuarios', new Usuario(Date.now(), document.getElementById('u-user').value, document.getElementById('u-pass').value, document.getElementById('u-rol').value, document.getElementById('u-name').value));
+    const tbody = document.getElementById('tb-user');
+    if (error || !data) {
+        tbody.innerHTML = '<tr><td colspan="4">Error al cargar usuarios</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+    data.forEach(u => {
+        tbody.innerHTML += `<tr>
+            <td>${u.email}</td>
+            <td>${u.nombre}</td>
+            <td>${u.rol === 'vendedora' ? 'Ventas' : u.rol === 'almacen' ? 'Almacén' : 'Controller'}</td>
+            <td>
+    <button class="btn btn-sm btn-secondary" onclick="Vistas.modalEditarUsuario('${u.id}')">Editar</button>
+    ${u.id !== sistema.usuarioActual.id
+        ? `<button class="btn btn-sm btn-danger" onclick="Vistas.eliminarUsuario('${u.id}')">X</button>`
+        : ''
+    }
+</td>
+        </tr>`;
+    });
+},
+
+modalCrearUsuario: () => {
+    Vistas.abrirModal(`
+        <h3>Nuevo Usuario</h3>
+        <label>Correo electrónico</label>
+        <input id="u-email" type="email" placeholder="correo@ejemplo.com">
+        <label>Contraseña</label>
+        <input id="u-pass" type="password" placeholder="Mínimo 6 caracteres">
+        <label>Repetir contraseña</label>
+        <input id="u-pass2" type="password" placeholder="Repite la contraseña">
+        <p id="u-pass-msg" style="font-size:0.8rem; color:red; margin-top:-0.5rem; display:none;">Las contraseñas no coinciden</p>
+        <label>Nombre completo</label>
+        <input id="u-name" placeholder="Ej: Ana García">
+        <label>Rol</label>
+        <select id="u-rol">
+            <option value="vendedora">Vendedora</option>
+            <option value="almacen">Almacén</option>
+            <option value="controller">Controller</option>
+        </select>
+        <button id="btn-crear-user" class="btn btn-success w-full mt-4" onclick="Vistas.guardarUsuario()" disabled>Crear Usuario</button>
+        <button class="btn btn-secondary w-full mt-2" onclick="Vistas.cerrarModal()">Cancelar</button>
+    `);
+
+    const pass1 = document.getElementById('u-pass');
+    const pass2 = document.getElementById('u-pass2');
+    const msg = document.getElementById('u-pass-msg');
+    const btn = document.getElementById('btn-crear-user');
+
+    const validar = () => {
+        if (pass1.value.length < 6) {
+            msg.innerText = 'Mínimo 6 caracteres';
+            msg.style.display = 'block';
+            btn.disabled = true;
+        } else if (pass2.value && pass1.value !== pass2.value) {
+            msg.innerText = 'Las contraseñas no coinciden';
+            msg.style.display = 'block';
+            btn.disabled = true;
+        } else if (pass1.value === pass2.value && pass2.value.length >= 6) {
+            msg.style.display = 'none';
+            btn.disabled = false;
+        } else {
+            msg.style.display = 'none';
+            btn.disabled = true;
+        }
+    };
+
+    pass1.addEventListener('input', validar);
+    pass2.addEventListener('input', validar);
+},
+
+guardarUsuario: async () => {
+    const email = document.getElementById('u-email').value;
+    const pass = document.getElementById('u-pass').value;
+    const nombre = document.getElementById('u-name').value;
+    const rol = document.getElementById('u-rol').value;
+
+    if (!email || !pass || !nombre) return alert("Todos los campos son obligatorios");
+    if (pass.length < 6) return alert("La contraseña debe tener mínimo 6 caracteres");
+
+    const btn = document.querySelector('#modal-body .btn-success');
+    btn.innerText = 'Creando...';
+    btn.disabled = true;
+
+    const resultado = await Api.crearUsuario(email, pass, nombre, rol);
+
+    if (resultado.ok) {
+        alert('Usuario creado exitosamente');
         Vistas.cerrarModal();
         sistema.navegar('usuarios');
-    },
+    } else {
+        alert('Error: ' + resultado.mensaje);
+        btn.innerText = 'Crear Usuario';
+        btn.disabled = false;
+    }
+},
 
-    eliminarUsuario: (id) => {
-        if (confirm("¿Borrar usuario?")) { db.eliminar('usuarios', 'id', id); sistema.navegar('usuarios'); }
-    },
+eliminarUsuario: async (id) => {
+    if (!confirm("¿Borrar este usuario? Esta acción no se puede deshacer.")) return;
 
-    modalEditarUsuario: (id) => {
-        const u = db.getTabla('usuarios').find(x => x.id === id);
-        const roles = ['vendedora', 'almacen', 'controller'];
-        const options = roles.map(r => `<option value="${r}" ${u.rol === r ? 'selected' : ''}>${r.charAt(0).toUpperCase() + r.slice(1)}</option>`).join('');
+    const { error } = await supabaseClient
+        .from('perfiles')
+        .delete()
+        .eq('id', id);
 
-        const html = `
-            <h3>Editar Usuario</h3>
-            <label>Usuario</label><input id="e-u-user" value="${u.username}">
-            <label>Contraseña</label><input id="e-u-pass" value="${u.password}">
-            <label>Nombre</label><input id="e-u-name" value="${u.nombre}">
-            <label>Rol</label><select id="e-u-rol">${options}</select>
-            <button class="btn btn-primary w-full mt-4" onclick="Vistas.guardarEdicionUsuario(${id})">Guardar Cambios</button>
-            <button class="btn btn-secondary w-full mt-2" onclick="Vistas.cerrarModal()">Cancelar</button>
-        `;
-        Vistas.abrirModal(html);
-    },
+    if (error) {
+        alert('Error al eliminar: ' + error.message);
+        return;
+    }
+    sistema.navegar('usuarios');
+},
 
-    guardarEdicionUsuario: (id) => {
-        const updates = {
-            username: document.getElementById('e-u-user').value,
-            password: document.getElementById('e-u-pass').value,
-            nombre: document.getElementById('e-u-name').value,
-            rol: document.getElementById('e-u-rol').value
-        };
+modalEditarUsuario: async (id) => {
+    const { data: u, error } = await supabaseClient
+        .from('perfiles')
+        .select('*')
+        .eq('id', id)
+        .single();
 
-        if (!updates.username || !updates.password) return alert("Usuario y contraseña requeridos");
+    if (error || !u) return alert('Error al cargar usuario');
 
-        db.actualizar('usuarios', 'id', id, updates);
+    const roles = ['vendedora', 'almacen', 'controller'];
+    const options = roles.map(r =>
+        `<option value="${r}" ${u.rol === r ? 'selected' : ''}>${r.charAt(0).toUpperCase() + r.slice(1)}</option>`
+    ).join('');
+
+    const btnBloqueo = id === sistema.usuarioActual.id ? '' : u.bloqueado
+    ? `<button class="btn btn-success w-full mt-2" onclick="Vistas.toggleBloqueo('${id}', false)">✓ Desbloquear Usuario</button>`
+    : `<button class="btn btn-danger w-full mt-2" onclick="Vistas.toggleBloqueo('${id}', true)">✗ Bloquear Usuario</button>`;
+    
+    Vistas.abrirModal(`
+        <h3>Editar Usuario</h3>
+        <label>Nombre</label>
+        <input id="e-u-name" value="${u.nombre}">
+        <label>Rol</label>
+        <select id="e-u-rol">${options}</select>
+        <button class="btn btn-primary w-full mt-4" onclick="Vistas.guardarEdicionUsuario('${id}')">Guardar Cambios</button>
+        ${btnBloqueo}
+        <button class="btn btn-secondary w-full mt-2" onclick="Vistas.cerrarModal()">Cancelar</button>
+    `);
+},
+
+guardarEdicionUsuario: async (id) => {
+    const nombre = document.getElementById('e-u-name').value;
+    const rol = document.getElementById('e-u-rol').value;
+
+    if (!nombre) return alert("El nombre es obligatorio");
+
+    const { error } = await supabaseClient
+        .from('perfiles')
+        .update({ nombre: nombre, rol: rol })
+        .eq('id', id);
+
+    if (error) return alert('Error al guardar: ' + error.message);
+
+    alert('Usuario actualizado');
+    Vistas.cerrarModal();
+    sistema.navegar('usuarios');
+},
+
+toggleBloqueo: async (id, bloquear) => {
+    const accion = bloquear ? 'bloquear' : 'desbloquear';
+    if (!confirm(`¿Seguro que quieres ${accion} este usuario?`)) return;
+
+    const resultado = await Api.bloquearUsuario(id, bloquear);
+    if (resultado.ok) {
+        alert(`Usuario ${bloquear ? 'bloqueado' : 'desbloqueado'} correctamente`);
         Vistas.cerrarModal();
         sistema.navegar('usuarios');
-    },
+    } else {
+        alert('Error: ' + resultado.mensaje);
+    }
+},  
 
     renderHistorial: (c) => {
         c.innerHTML = `<h2>Historial</h2><div class="table-container"><table><thead><tr><th>Fecha</th><th>Entidad</th><th>Detalle</th><th>User</th></tr></thead><tbody id="tb-hist"></tbody></table></div>`;
