@@ -13,16 +13,26 @@ const Api = {
 
     const { data: perfil } = await supabaseClient
         .from('perfiles')
-        .select('*')
+        .select('*, roles(nombre, modulos)')
         .eq('id', data.user.id)
         .single();
 
+    if (!perfil) return { ok: false, mensaje: 'Perfil no encontrado' };
     if (perfil.bloqueado) {
         await supabaseClient.auth.signOut();
         return { ok: false, mensaje: 'No tienes acceso al sistema. Comunícate con un administrador.' };
     }
 
-    return { ok: true, usuario: { ...data.user, ...perfil } };
+    return { 
+        ok: true, 
+        usuario: { 
+            ...data.user, 
+            nombre: perfil.nombre,
+            email: perfil.email,
+            rol: perfil.roles?.nombre,
+            modulos: perfil.roles?.modulos || []
+        } 
+    };
 },
 
     logout: async () => {

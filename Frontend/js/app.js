@@ -87,31 +87,37 @@ async logout() {
 }
 
     renderMenu() {
-        const menu = document.getElementById('menu-tabs');
-        menu.innerHTML = '';
-        const role = this.usuarioActual.rol;
-        const tabs = [];
+    const menu = document.getElementById('menu-tabs');
+    menu.innerHTML = '';
+    const modulos = this.usuarioActual.modulos || [];
 
-        if (role === 'controller') tabs.push({ id: 'productos', label: 'Productos' }, { id: 'usuarios', label: 'Usuarios' }, { id: 'historial', label: 'Historial' });
+    const todasLasTabs = [
+        { id: 'productos', label: 'Productos' },
+        { id: 'usuarios', label: 'Usuarios' },
+        { id: 'historial', label: 'Historial' },
+        { id: 'ventas', label: '+ Nuevo Pedido' },
+        { id: 'clientes', label: 'Clientes' },
+        { id: 'lista_pedidos', label: 'Pedidos' },
+        { id: 'catalogo', label: 'Ver Stock' },
+        { id: 'viajes', label: 'Viajes / Picking' },
+        { id: 'almacen_stock', label: 'Ingreso Stock' }
+    ];
 
-        if (role === 'vendedora' || role === 'controller') tabs.push({ id: 'ventas', label: '+ Nuevo Pedido' }, { id: 'clientes', label: 'Clientes' }, { id: 'lista_pedidos', label: 'Pedidos' }, { id: 'catalogo', label: 'Ver Stock' });
+    const tabs = todasLasTabs.filter(t => modulos.includes(t.id));
 
-        if (role === 'almacen' || role === 'controller' || role === 'vendedora') tabs.push({ id: 'viajes', label: 'Viajes / Picking' });
-
-        if (role === 'almacen' || role === 'controller') tabs.push({ id: 'almacen_stock', label: 'Ingreso Stock' });
-
-        tabs.forEach(tab => {
-            const btn = document.createElement('div');
-            btn.className = 'nav-tab'; btn.innerText = tab.label;
-            btn.onclick = () => {
-                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-                btn.classList.add('active');
-                this.navegar(tab.id);
-            };
-            menu.appendChild(btn);
-        });
-        if (tabs.length > 0) menu.firstChild.click();
-    }
+    tabs.forEach(tab => {
+        const btn = document.createElement('div');
+        btn.className = 'nav-tab';
+        btn.innerText = tab.label;
+        btn.onclick = () => {
+            document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+            btn.classList.add('active');
+            this.navegar(tab.id);
+        };
+        menu.appendChild(btn);
+    });
+    if (tabs.length > 0) menu.firstChild.click();
+}
 
     navegar(vistaId) {
         const area = document.getElementById('content-area'); area.innerHTML = '';
